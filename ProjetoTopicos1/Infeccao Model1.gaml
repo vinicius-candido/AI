@@ -25,7 +25,7 @@ global {
 	//Mortality rate for the host
 	float nu <- 0.001 ;
 	//Rate for resistance 
-	float delta <- 0.01;
+	float delta <- 0.7;
 	//Number total of hosts
 	int numberHosts <- numSuscetiveis+numInfectados+numVacinados;
 	//Boolean to represent if the infection is computed locally
@@ -178,7 +178,7 @@ species Agente  {
     }
             
     aspect basic {
-        draw circle(1) color: color; 
+        draw circle(1) color: (estaInfectado and !estaVacinado) ? #red : #green;
     }
   } 
 
