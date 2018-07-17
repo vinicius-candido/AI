@@ -11,11 +11,11 @@ global {
 	int ciclo <- 1 #cycle;
 	float step <- 1 #day;
 	//Numero de agentes suscetiveis
-    int numSuscetiveis <- 495;
+    int numSuscetiveis <- 44;
     //Numero de agentes infectados
     int numInfectados <- 5 ;
     //Numero de agentes vacinados
-    int numVacinados <- 0 ;
+    int numVacinados <- 1 ;
 
 	//Dias duracao infeccao
 	int periodoInfeccao <- 9;
@@ -25,13 +25,13 @@ global {
 	//Mortality rate for the host
 	float nu <- 0.001 ;
 	//Rate for resistance 
-	float delta <- 0.7;
+	float delta <- 0.2;
 	//Number total of hosts
 	int numberHosts <- numSuscetiveis+numInfectados+numVacinados;
 	//Boolean to represent if the infection is computed locally
-	bool local_infection <- true parameter: "Is the infection is computed locally?";
+	bool local_infection <- true;
 	//Range of the cells considered as neighbours for a cell
-	int neighbours_size <- 2 min:1 max: 5 parameter:"Size of the neighbours";
+	int neighbours_size <- 1 min:1 max: 2;
 	
 	float R0 ;
 	geometry shape <- square(70#m);
@@ -57,7 +57,7 @@ global {
        }
        
        //R0 <- beta/(delta+nu);
-		write "Basic Reproduction Number: "+ R0;
+		//write "Basic Reproduction Number: "+ R0;
    }
    
    //Reflex to update the number of infected
@@ -77,15 +77,14 @@ species Agente  {
 	//Booleans que representam o estado atual do agente
 	bool estaInfectado <- false;
     bool estaVacinado <- false;
-    bool bonsHabitosHigiene <- flip(0.2);
+    bool bonsHabitosHigiene <- flip(0.001);
     int diasInfectado;
     //Interacao entre agentes (de 0.0 a 1.0)
 		/**0.0 - 0.1: Conversa
 		0.1 - 0.3: Aperto de mão
 		0.3 - 0.8: Abraço
 		0.8 - 1.0: Beijo*/    
-	float fatorInteracao <- 0.01 ;
-    rgb color <- #green;
+	float fatorInteracao <- rnd(1) / 10;
     sir_grid myPlace;
     
     init {
@@ -93,13 +92,14 @@ species Agente  {
     	myPlace <- one_of (sir_grid as list);
     	location <- myPlace.location;
     }     
+    
     //Reflex to make the agent move   
     reflex basic_move {
     	myPlace <- one_of (myPlace.neighbours) ;
         location <- myPlace.location;
     }	
     
-    reflex conta_dias_infeccao {
+    reflex conta_dias_infeccao when: every(1#day){
     	if(estaInfectado){
     		if(diasInfectado > periodoInfeccao){
     			estaInfectado <- false;
@@ -108,7 +108,7 @@ species Agente  {
     		}
     	}
 	}
-    
+         
     //Reflexo que torna o agente infectado
     reflex tornar_infectado when: !estaVacinado {
     	ask Agente at_distance 1#m {
@@ -116,13 +116,15 @@ species Agente  {
     			if(self.estaInfectado or myself.estaInfectado){
     				self.estaInfectado <- true;
     				myself.estaInfectado <- true;
+    				color <- #red;
     			} 
     		} else if(between(0.5,self.fatorInteracao + myself.fatorInteracao,1.5)){
     			if(self.estaInfectado or myself.estaInfectado){
     				if !(self.estaVacinado){
     					if!(self.bonsHabitosHigiene or myself.bonsHabitosHigiene){
-    						if(flip(delta)){
+    						if(flip(0.9999)){
     							self.estaInfectado <- true; myself.estaInfectado <- true;
+    							color <- #red;
     						}
     					}
     				}
@@ -130,14 +132,12 @@ species Agente  {
     		} else{
 	    		if(self.estaInfectado and myself.estaInfectado){
 	    			if (self.estaVacinado){
-	    				estaInfectado <- flip(delta);
+	    				estaInfectado <- flip(0.9999);
 	    			}
 	    		}
 	    	}
 	    }
     	
-    		
-    		
       	float rate  <- 0.0;
     	//computation of the infection according to the possibility of the disease to spread locally or not
     	if(local_infection) {
@@ -152,36 +152,33 @@ species Agente  {
     		rate <- numInfectados / numberHosts;
     	}
     }
-    
-
-//    	if (flip(beta * rate)) {
-//        	is_susceptible <-  false;
-//            is_infected <-  true;
-//            is_immune <-  false;
-//            color <-  #red;    
-//        }
 	
-
-    //Reflex to make the agent recovered if it is infected and if it success the probability
+    //Reflexo que torna o agente imune de acordo com a taxa de pessoas que tem bons habitos de higiene
     reflex become_immune when: (estaInfectado and flip(delta)) {
     	estaInfectado <- false;
+    	estaVacinado <- true;
         color <- #blue;
     }
-    //Reflex to kill the agent according to the probability of dying
+    
+    //Reflexo que mata o agente de acordo com a taxa de mortalidade
     reflex shallDie when: flip(nu) {
-    	//Create another agent
-		create species(self)  {
-			myPlace <- myself.myPlace ;
-			location <- myself.location ; 
-		}
-       	do die;
+    	if(estaInfectado){
+    		do die;	
+    	}
     }
-            
+       
     aspect basic {
-        draw circle(1) color: (estaInfectado and !estaVacinado) ? #red : #green;
+    	if(estaInfectado){
+    		draw circle(1) color: #red;
+    	}
+    	else if(estaVacinado){
+    		draw circle(1) color: #blue;
+    	}
+    	else{
+    		draw circle(1) color: #green;
+    	}
     }
   } 
-
 
 experiment Simulation type: gui { 
  	parameter "Número de agentes suscetíveis ao vírus" var: numSuscetiveis ;
@@ -189,7 +186,7 @@ experiment Simulation type: gui {
     parameter "Número inicial de agentes vacinados" var:numVacinados ;	
     parameter "Percentual de pessoas com com hábitos de higiene" var:delta ;
 	//parameter "Beta (S->I)" var:beta; 	// The parameter Beta
-	parameter "Mortality" var:nu ;	// The parameter Nu
+	parameter "Mortalidade" var:nu ;	// The parameter Nu
 	parameter "Delta (I->R)" var: delta; // The parameter Delta
 	//parameter "Is the infection is computed locally?" var:local_infection ;
 	//parameter "Size of the neighbours" var:neighbours_size ;
@@ -199,10 +196,10 @@ experiment Simulation type: gui {
 	        species Agente aspect: basic;
 	    }
 	        
-	    display chart refresh: every(10#cycles) {
-			chart "Susceptible" type: series background: #lightgray style: exploded {
-				data "infected" value: Agente count (each.estaInfectado) color: #red;
-				data "immune" value: Agente count (each.estaVacinado) color: #blue;
+	    display chart refresh: every(1#cycle) {
+			chart "Agentes" type: series background: #lightgray style: exploded {
+				data "Infectados" value: Agente count (each.estaInfectado) color: #red;
+				data "Imunes" value: Agente count (each.estaVacinado) color: #blue;
 			}
 		}
 			
